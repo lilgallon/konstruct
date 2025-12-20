@@ -1,6 +1,5 @@
 package dev.gallon.konstruct.serialization
 
-import konstruct.serialization.mapped
 import kotlinx.serialization.KSerializer
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.json.Json

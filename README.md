@@ -45,7 +45,7 @@ dependencies {
 Annotate any class (typically a configuration class) with `@GenerateSerializers` to trigger the generation:
 
 ```kotlin
-import konstruct.annotations.GenerateSerializers
+import dev.gallon.konstruct.annotations.GenerateSerializers
 
 @GenerateSerializers(
     classes = [
@@ -64,7 +64,7 @@ Konstruct will generate:
 ### Using the Generated Serializers
 
 ```kotlin
-import konstruct.generated.generatedSerializersModule
+import dev.gallon.konstruct.generated.generatedSerializersModule
 import kotlinx.serialization.json.Json
 
 val json = Json {

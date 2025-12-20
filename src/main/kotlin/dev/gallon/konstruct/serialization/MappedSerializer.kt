@@ -1,4 +1,4 @@
-package konstruct.serialization
+package dev.gallon.konstruct.serialization
 
 import kotlinx.serialization.KSerializer
 import kotlinx.serialization.descriptors.SerialDescriptor

@@ -1,9 +1,9 @@
-package konstruct.processor
+package dev.gallon.konstruct.processor
 
 import com.google.devtools.ksp.processing.*
 import com.google.devtools.ksp.symbol.*
 import com.google.devtools.ksp.validate
-import konstruct.annotations.GenerateSerializers
+import dev.gallon.konstruct.annotations.GenerateSerializers
 import com.squareup.kotlinpoet.*
 import com.squareup.kotlinpoet.ParameterizedTypeName.Companion.parameterizedBy
 import com.squareup.kotlinpoet.ksp.toClassName

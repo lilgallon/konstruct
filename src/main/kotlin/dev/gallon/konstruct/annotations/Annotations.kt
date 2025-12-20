@@ -1,4 +1,4 @@
-package konstruct.annotations
+package dev.gallon.konstruct.annotations
 
 import kotlin.reflect.KClass
 
