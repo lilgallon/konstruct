@@ -16,58 +16,43 @@ class GenerateSerializerProcessor(
 
     private val classSerializersMap = mutableMapOf<String, String>()
     private val fieldSerializersMap = mutableMapOf<String, String>()
+    private val processedSerializers = mutableSetOf<String>()
 
     override fun process(resolver: Resolver): List<KSAnnotated> {
         val symbols = resolver.getSymbolsWithAnnotation(GenerateSerializers::class.qualifiedName!!)
         val unableToProcess = symbols.filter { !it.validate() }.toList()
 
+        processedSerializers.clear()
+
         symbols
             .filter { it is KSClassDeclaration && it.validate() }
-            .forEach { processGenerateSerializers(it as KSClassDeclaration, resolver) }
+            .map { it as KSClassDeclaration }
+            .forEach { declaration ->
+                processAnnotation(declaration, resolver)
+            }
 
         return unableToProcess
     }
 
-    private fun processGenerateSerializers(
-        declaration: KSClassDeclaration,
-        resolver: Resolver,
-    ) {
+    private fun processAnnotation(declaration: KSClassDeclaration, resolver: Resolver) {
         val annotation = declaration.annotations
             .firstOrNull { it.shortName.asString() == "GenerateSerializers" } ?: return
 
-        @Suppress("UNCHECKED_CAST")
-        val classes = (
-            annotation.arguments
-                .first { it.name?.asString() == "classes" }
-                .value as? ArrayList<KSType>
-            )?.mapNotNull { it.declaration.qualifiedName?.asString() } ?: emptyList()
+        classSerializersMap.clear()
+        fieldSerializersMap.clear()
 
-        @Suppress("UNCHECKED_CAST")
-        val excludedSerializersFromModule = (
-            annotation.arguments
-                .firstOrNull { it.name?.asString() == "excludedSerializersFromModule" }
-                ?.value as? ArrayList<KSType>
-            )?.mapNotNull { it.declaration.qualifiedName?.asString() } ?: emptyList()
-
+        // Collect custom class serializers
         val customClassSerializers = (
             annotation.arguments
                 .firstOrNull { it.name?.asString() == "customClassSerializers" }
                 ?.value as? ArrayList<*>
             ) ?: emptyList()
 
-        val customFieldSerializers = (
-            annotation.arguments
-                .firstOrNull { it.name?.asString() == "customFieldSerializers" }
-                ?.value as? ArrayList<*>
-            ) ?: emptyList()
-
-        classSerializersMap.clear()
         customClassSerializers.forEach { annotationValue ->
             if (annotationValue is KSAnnotation) {
                 val targetClass = annotationValue.arguments
                     .firstOrNull { it.name?.asString() == "targetClass" }
                     ?.value as? KSType
-
                 val serializerClass = annotationValue.arguments
                     .firstOrNull { it.name?.asString() == "serializer" }
                     ?.value as? KSType
@@ -75,7 +60,6 @@ class GenerateSerializerProcessor(
                 if (targetClass != null && serializerClass != null) {
                     val targetQualifiedName = targetClass.declaration.qualifiedName?.asString()
                     val serializerQualifiedName = serializerClass.declaration.qualifiedName?.asString()
-
                     if (targetQualifiedName != null && serializerQualifiedName != null) {
                         classSerializersMap[targetQualifiedName] = serializerQualifiedName
                     }
@@ -83,15 +67,19 @@ class GenerateSerializerProcessor(
             }
         }
 
-        fieldSerializersMap.clear()
+        // Collect custom field serializers
+        val customFieldSerializers = (
+            annotation.arguments
+                .firstOrNull { it.name?.asString() == "customFieldSerializers" }
+                ?.value as? ArrayList<*>
+            ) ?: emptyList()
+
         customFieldSerializers.forEach { customFieldSerializerAnnotation ->
             if (customFieldSerializerAnnotation is KSAnnotation) {
                 val targetClass = customFieldSerializerAnnotation.arguments
                     .firstOrNull { it.name?.asString() == "targetClass" }
                     ?.value as? KSType
-
                 val className = targetClass?.declaration?.qualifiedName?.asString()
-
                 val fieldSerializer = customFieldSerializerAnnotation.arguments
                     .firstOrNull { it.name?.asString() == "fieldSerializer" }
                     ?.value as? ArrayList<*>
@@ -102,7 +90,6 @@ class GenerateSerializerProcessor(
                             val fieldName = fieldSerializerAnnotation.arguments
                                 .firstOrNull { it.name?.asString() == "name" }
                                 ?.value as? String
-
                             val serializerClass = fieldSerializerAnnotation.arguments
                                 .firstOrNull { it.name?.asString() == "serializer" }
                                 ?.value as? KSType
@@ -121,16 +108,34 @@ class GenerateSerializerProcessor(
 
         val generatedSerializers = mutableListOf<Pair<String, String>>()
 
+        // Collect classes to generate serializers for
+        @Suppress("UNCHECKED_CAST")
+        val classes = (
+            annotation.arguments
+                .first { it.name?.asString() == "classes" }
+                .value as? ArrayList<KSType>
+            )?.mapNotNull { it.declaration.qualifiedName?.asString() } ?: emptyList()
+
         classes.forEach { className ->
             val targetClass = resolver.getClassDeclarationByName(resolver.getKSNameFromString(className))
             if (targetClass == null) {
                 logger.error("Cannot find class: $className", declaration)
             } else {
-                generateSurrogateAndSerializer(targetClass)
+                if (processedSerializers.add(className)) {
+                    generateSurrogateAndSerializer(targetClass)
+                }
                 val simpleName = targetClass.simpleName.asString()
                 generatedSerializers.add(className to "${simpleName}Serializer")
             }
         }
+
+        // Collect exclusions
+        @Suppress("UNCHECKED_CAST")
+        val excludedSerializersFromModule = (
+            annotation.arguments
+                .firstOrNull { it.name?.asString() == "excludedSerializersFromModule" }
+                ?.value as? ArrayList<KSType>
+            )?.mapNotNull { it.declaration.qualifiedName?.asString() } ?: emptyList()
 
         if (generatedSerializers.isNotEmpty()) {
             generateSerializersModule(
@@ -156,7 +161,7 @@ class GenerateSerializerProcessor(
         }
 
         val file = FileSpec.builder(packageName, serializerName)
-            .addImport("konstruct.serialization", "mapped")
+            .addImport("dev.gallon.konstruct.serialization", "mapped")
 
         val surrogateClass = TypeSpec.classBuilder(surrogateName)
             .addModifiers(KModifier.DATA)
@@ -226,7 +231,7 @@ class GenerateSerializerProcessor(
                 delegate = CodeBlock.builder()
                     .add("%T.serializer().mapped(\n", ClassName(packageName, surrogateName))
                     .indent()
-                    .add("convertForEncoding = {\n")
+                    .add("convertForEncoding = { it: %T ->\n", targetClassName)
                     .indent()
                     .add("%T(\n", ClassName(packageName, surrogateName))
                     .indent()
@@ -236,7 +241,7 @@ class GenerateSerializerProcessor(
                     .add(")\n")
                     .unindent()
                     .add("},\n")
-                    .add("convertForDecoding = {\n")
+                    .add("convertForDecoding = { it: %T ->\n", ClassName(packageName, surrogateName))
                     .indent()
                     .add("%T(\n", targetClassName)
                     .indent()
@@ -301,7 +306,10 @@ class GenerateSerializerProcessor(
 
     private fun generateSerializersModule(annotatedClass: KSClassDeclaration, serializers: List<Pair<String, String>>) {
         val packageName = "konstruct.generated"
-        val moduleName = "GeneratedSerializersModule"
+        val className = annotatedClass.simpleName.asString()
+        val moduleName = "${className}Module"
+        val propertyName = className.replaceFirstChar { it.lowercase() } + "Module"
+
         val file = FileSpec.builder(packageName, moduleName)
             .addImport("kotlinx.serialization.modules", "SerializersModule", "contextual")
 
@@ -315,7 +323,7 @@ class GenerateSerializerProcessor(
         moduleCode.unindent().add("}")
 
         file.addProperty(
-            PropertySpec.builder("generatedSerializersModule", ClassName("kotlinx.serialization.modules", "SerializersModule"))
+            PropertySpec.builder(propertyName, ClassName("kotlinx.serialization.modules", "SerializersModule"))
                 .initializer(moduleCode.build())
                 .build(),
         )

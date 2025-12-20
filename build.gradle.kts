@@ -25,6 +25,7 @@ dependencies {
 
     testImplementation(kotlin("test"))
     testImplementation(libs.kotlin.compile.testing.ksp)
+    kspTest(project(":"))
 }
 
 kotlin {
