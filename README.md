@@ -26,7 +26,6 @@ Add the dependency to your `build.gradle.kts`:
 ```kotlin
 repositories {
     mavenCentral()
-    maven { url = uri("https://maven.pkg.github.com/lilgallon/konstruct") }
 }
 
 dependencies {
@@ -35,6 +34,8 @@ dependencies {
     ksp("dev.gallon:konstruct:1.0.0")
 }
 ```
+
+You can see a working example at [izivia/ocpi-toolkit](https://github.com/IZIVIA/ocpi-toolkit/blob/main/integrations/ocpi-toolkit-2.2.1-kotlinx-serialization/build.gradle.kts).
 
 ---
 

@@ -1,16 +1,15 @@
-name: Publish to GitHub Packages
+name: Publish to Maven Central
 
 on:
   push:
     tags:
-      - "v-*"
+      - "R-*"
 
 jobs:
   publish:
     runs-on: ubuntu-latest
     permissions:
-      contents: read
-      packages: write
+      contents: write
     steps:
       - name: Checkout sources
         uses: actions/checkout@v6
@@ -23,7 +22,23 @@ jobs:
         uses: gradle/actions/setup-gradle@v5
       - name: Grant execute permission for gradlew
         run: chmod +x gradlew
-      - name: Publish with Gradle
-        run: ./gradlew publish
+
+      - name: Publish to Sonatype
+        run: ./gradlew publishToSonatype closeAndReleaseSonatypeStagingRepository
         env:
+          VERSION: ${{ github.ref }}
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          SONATYPE_USERNAME: ${{ secrets.SONATYPE_USERNAME }}
+          SONATYPE_PASSWORD: ${{ secrets.SONATYPE_PASSWORD }}
+          GPG_PRIVATE_KEY: ${{ secrets.GPG_PRIVATE_KEY }}
+          GPG_PASSPHRASE: ${{ secrets.GPG_PASSPHRASE }}
+
+      - name: Create a GH release
+        env:
+          VERSION: ${{ github.ref_name }}
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |-
+          gh release create ${{ github.ref }} \
+              --generate-notes \
+              --title "Version ${VERSION#R-}" \
+              build/libs/*.jar
