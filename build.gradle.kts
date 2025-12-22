@@ -6,7 +6,7 @@ plugins {
 }
 
 group = "dev.gallon"
-version = "1.0.0"
+version = "0.0.1"
 
 repositories {
     mavenCentral()
@@ -36,6 +36,12 @@ tasks.test {
     useJUnitPlatform()
 }
 
+kotlin {
+    sourceSets.test {
+        kotlin.srcDir("build/generated/ksp/test/kotlin")
+    }
+}
+
 publishing {
     publications {
         create<MavenPublication>("maven") {
@@ -44,7 +50,7 @@ publishing {
     }
     repositories {
         maven {
-            name = "GitHubPackages"
+            name = "konstruct"
             url = uri("https://maven.pkg.github.com/${System.getenv("GITHUB_REPOSITORY") ?: "liliangallon/konstruct"}")
             credentials {
                 username = System.getenv("GITHUB_ACTOR")
